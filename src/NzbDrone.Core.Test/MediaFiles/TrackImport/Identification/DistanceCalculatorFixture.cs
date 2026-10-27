@@ -177,6 +177,22 @@ namespace NzbDrone.Core.Test.MediaFiles.BookImport.Identification
         }
 
         [Test]
+        public void should_not_prefer_a_different_book_because_it_has_no_isbn()
+        {
+            // The file carries the ISBN of an edition the metadata source does not list for the
+            // correct book, while a sibling book by the same author has no ISBN on its edition.
+            var localBook = GivenLocalBook("Half a King", "Joe Abercrombie", isbn: "9780804178334");
+
+            var correctBook = GivenEdition("Half a King", "Joe Abercrombie", isbn: "9780007550210");
+            var otherBook = GivenEdition("Half the World", "Joe Abercrombie");
+
+            var correctDistance = DistanceCalculator.BookDistance(new List<LocalBook> { localBook }, correctBook).NormalizedDistance();
+            var otherDistance = DistanceCalculator.BookDistance(new List<LocalBook> { localBook }, otherBook).NormalizedDistance();
+
+            correctDistance.Should().BeLessThan(otherDistance);
+        }
+
+        [Test]
         public void should_not_penalise_a_differing_asin_more_than_a_missing_one()
         {
             // Editions of the same work legitimately carry different ASINs, so a mismatch must not
