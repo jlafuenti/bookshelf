@@ -384,6 +384,7 @@ namespace NzbDrone.Core.Parser
 
                 var result = new ParsedBookInfo
                 {
+                    ReleaseTitle = releaseTitle,
                     AuthorName = foundAuthor,
                     AuthorTitleInfo = GetAuthorTitleInfo(foundAuthor),
                     BookTitle = foundBook

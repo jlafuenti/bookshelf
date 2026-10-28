@@ -245,6 +245,18 @@ namespace NzbDrone.Core.Test.ParserTests
             parseResult.BookTitle.Should().Be(expectedBook);
         }
 
+        [Test]
+        public void should_keep_release_title_when_parsing_with_search_criteria()
+        {
+            // custom formats match ReleaseTitle; a fuzzy-matched release must still carry it
+            GivenSearchCriteria("Brent Weeks", "The Way of Shadows");
+            var report = "Weeks, Brent - Night Angel 01 - 03 - Night Angel Trilogy (The Way of Shadows; Shadow's Edge; Beyond the Shadows) (epub)";
+            var parseResult = Parser.Parser.ParseBookTitleWithSearchCriteria(report, _author, _books);
+
+            parseResult.Should().NotBeNull();
+            parseResult.ReleaseTitle.Should().Be(report);
+        }
+
         [TestCase("Ed Sheeran", "I See Fire", "Ed Sheeran I See Fire[Mimp3.eu].mp3 FLAC")]
         [TestCase("Ed Sheeran", "Divide", "Ed Sheeran   ? Divide FLAC")]
         [TestCase("Ed Sheeran", "+", "Ed Sheeran + FLAC")]
