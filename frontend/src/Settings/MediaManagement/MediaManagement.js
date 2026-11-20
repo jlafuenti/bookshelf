@@ -299,6 +299,24 @@ class MediaManagement extends Component {
                   <FormGroup
                     advancedSettings={advancedSettings}
                     isAdvanced={true}
+                    size={sizes.MEDIUM}
+                  >
+                    <FormLabel>
+                      {translate('KeepUnmatchedFilesUnmatched')}
+                    </FormLabel>
+
+                    <FormInputGroup
+                      type={inputTypes.CHECK}
+                      name="keepUnmatchedFilesUnmatched"
+                      helpText={translate('KeepUnmatchedFilesUnmatchedHelpText')}
+                      onChange={onInputChange}
+                      {...settings.keepUnmatchedFilesUnmatched}
+                    />
+                  </FormGroup>
+
+                  <FormGroup
+                    advancedSettings={advancedSettings}
+                    isAdvanced={true}
                   >
                     <FormLabel>
                       {translate('RescanAuthorFolderAfterRefresh')}

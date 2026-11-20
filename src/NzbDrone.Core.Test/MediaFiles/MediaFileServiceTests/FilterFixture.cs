@@ -301,6 +301,112 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaFileServiceTests
             Subject.FilterUnchangedFiles(files, filter).Select(x => x.FullName).Should().Contain("C:\\file2.avi".AsOsAgnostic());
         }
 
+        private List<IFileInfo> GivenFile2Changed()
+        {
+            FileSystem.AddFile("C:\\file1.avi".AsOsAgnostic(), new MockFileData("".PadRight(10)) { LastWriteTime = _lastWrite });
+            FileSystem.AddFile("C:\\file2.avi".AsOsAgnostic(), new MockFileData("".PadRight(11)) { LastWriteTime = _lastWrite });
+            FileSystem.AddFile("C:\\file3.avi".AsOsAgnostic(), new MockFileData("".PadRight(10)) { LastWriteTime = _lastWrite });
+
+            return FileSystem.AllFiles.Select(x => DiskProvider.GetFileInfo(x)).ToList();
+        }
+
+        private void GivenKeepUnmatchedFilesUnmatched()
+        {
+            Mocker.GetMock<NzbDrone.Core.Configuration.IConfigService>()
+                .SetupGet(c => c.KeepUnmatchedFilesUnmatched)
+                .Returns(true);
+        }
+
+        private void GivenExistingFile2(BookFile file)
+        {
+            file.Path = "C:\\file2.avi".AsOsAgnostic();
+            file.Size = 10;
+            file.Modified = _lastWrite;
+
+            Mocker.GetMock<IMediaFileRepository>()
+                .Setup(c => c.GetFileWithPath(It.IsAny<List<string>>()))
+                .Returns(new List<BookFile> { file });
+        }
+
+        [TestCase(FilterFilesType.Known)]
+        [TestCase(FilterFilesType.Matched)]
+        public void keep_unmatched_should_not_return_changed_unmatched_file_already_remote_searched(FilterFilesType filter)
+        {
+            GivenKeepUnmatchedFilesUnmatched();
+            var files = GivenFile2Changed();
+            var searched = _lastWrite.AddDays(-1);
+            GivenExistingFile2(new BookFile { Edition = new LazyLoaded<Edition>(null), LastRemoteSearchTime = searched });
+
+            var result = Subject.FilterUnchangedFiles(files, filter);
+
+            result.Should().HaveCount(2);
+            result.Select(x => x.FullName).Should().NotContain("C:\\file2.avi".AsOsAgnostic());
+
+            // the new size is recorded so the file isn't seen as changed again, and the stamp is kept
+            Mocker.GetMock<IMediaFileRepository>()
+                .Verify(c => c.UpdateMany(It.Is<List<BookFile>>(l => l.Count == 1 && l[0].Size == 11 && l[0].LastRemoteSearchTime == searched)), Times.Once());
+        }
+
+        [TestCase(FilterFilesType.Known)]
+        [TestCase(FilterFilesType.Matched)]
+        public void keep_unmatched_should_not_update_unchanged_unmatched_file(FilterFilesType filter)
+        {
+            GivenKeepUnmatchedFilesUnmatched();
+            FileSystem.AddFile("C:\\file2.avi".AsOsAgnostic(), new MockFileData("".PadRight(10)) { LastWriteTime = _lastWrite });
+            var files = FileSystem.AllFiles.Select(x => DiskProvider.GetFileInfo(x)).ToList();
+            GivenExistingFile2(new BookFile { Edition = new LazyLoaded<Edition>(null), LastRemoteSearchTime = _lastWrite });
+
+            Subject.FilterUnchangedFiles(files, filter).Should().BeEmpty();
+
+            Mocker.GetMock<IMediaFileRepository>()
+                .Verify(c => c.UpdateMany(It.IsAny<List<BookFile>>()), Times.Never());
+        }
+
+        [TestCase(FilterFilesType.Known)]
+        [TestCase(FilterFilesType.Matched)]
+        public void keep_unmatched_should_return_changed_unmatched_file_never_remote_searched(FilterFilesType filter)
+        {
+            GivenKeepUnmatchedFilesUnmatched();
+            var files = GivenFile2Changed();
+            GivenExistingFile2(new BookFile { Edition = new LazyLoaded<Edition>(null) });
+
+            Subject.FilterUnchangedFiles(files, filter).Select(x => x.FullName).Should().Contain("C:\\file2.avi".AsOsAgnostic());
+        }
+
+        [TestCase(FilterFilesType.Known)]
+        [TestCase(FilterFilesType.Matched)]
+        public void keep_unmatched_should_return_changed_matched_file(FilterFilesType filter)
+        {
+            GivenKeepUnmatchedFilesUnmatched();
+            var files = GivenFile2Changed();
+            GivenExistingFile2(new BookFile { EditionId = 5, Edition = Builder<Edition>.CreateNew().Build(), LastRemoteSearchTime = _lastWrite });
+
+            Subject.FilterUnchangedFiles(files, filter).Select(x => x.FullName).Should().Contain("C:\\file2.avi".AsOsAgnostic());
+        }
+
+        [TestCase(FilterFilesType.Known)]
+        [TestCase(FilterFilesType.Matched)]
+        public void keep_unmatched_off_should_return_changed_unmatched_file_already_remote_searched(FilterFilesType filter)
+        {
+            var files = GivenFile2Changed();
+            GivenExistingFile2(new BookFile { Edition = new LazyLoaded<Edition>(null), LastRemoteSearchTime = _lastWrite });
+
+            Subject.FilterUnchangedFiles(files, filter).Select(x => x.FullName).Should().Contain("C:\\file2.avi".AsOsAgnostic());
+
+            Mocker.GetMock<IMediaFileRepository>()
+                .Verify(c => c.UpdateMany(It.IsAny<List<BookFile>>()), Times.Never());
+        }
+
+        [Test]
+        public void keep_unmatched_should_not_apply_to_full_rescan()
+        {
+            GivenKeepUnmatchedFilesUnmatched();
+            var files = GivenFile2Changed();
+            GivenExistingFile2(new BookFile { Edition = new LazyLoaded<Edition>(null), LastRemoteSearchTime = _lastWrite });
+
+            Subject.FilterUnchangedFiles(files, FilterFilesType.None).Should().HaveCount(3);
+        }
+
         [TestCase(FilterFilesType.Known)]
         [TestCase(FilterFilesType.Matched)]
         public void filter_should_return_existing_file_if_size_changed(FilterFilesType filter)

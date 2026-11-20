@@ -35,6 +35,7 @@ namespace NzbDrone.Core.Configuration
         bool ImportExtraFiles { get; set; }
         string ExtraFileExtensions { get; set; }
         bool WatchLibraryForChanges { get; set; }
+        bool KeepUnmatchedFilesUnmatched { get; set; }
         RescanAfterRefreshType RescanAfterRefresh { get; set; }
         AllowFingerprinting AllowFingerprinting { get; set; }
 

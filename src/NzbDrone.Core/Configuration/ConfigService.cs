@@ -228,6 +228,13 @@ namespace NzbDrone.Core.Configuration
             set { SetValue("WatchLibraryForChanges", value); }
         }
 
+        public bool KeepUnmatchedFilesUnmatched
+        {
+            get { return GetValueBoolean("KeepUnmatchedFilesUnmatched", false); }
+
+            set { SetValue("KeepUnmatchedFilesUnmatched", value); }
+        }
+
         public RescanAfterRefreshType RescanAfterRefresh
         {
             get { return GetValueEnum("RescanAfterRefresh", RescanAfterRefreshType.Always); }
