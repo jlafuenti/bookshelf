@@ -511,6 +511,8 @@
   "IsTagUsedCannotBeDeletedWhileInUse": "Cannot be deleted while in use",
   "Iso639-3": "ISO 639-3 language codes, or 'null', comma separated",
   "ItsEasyToAddANewAuthorOrBookJustStartTypingTheNameOfTheItemYouWantToAdd": "It's easy to add a New Author or Book just start typing the name of the item you want to add",
+  "KeepUnmatchedFilesUnmatched": "Keep Unmatched Files Unmatched",
+  "KeepUnmatchedFilesUnmatchedHelpText": "Don't re-identify an unmatched file that was already searched for when it changes on disk. Manual import and a full rescan still identify it",
   "Label": "Label",
   "LabelIsRequired": "Label is required",
   "Language": "Language",

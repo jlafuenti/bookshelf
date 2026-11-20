@@ -5,6 +5,7 @@ using System.Linq;
 using NLog;
 using NzbDrone.Common;
 using NzbDrone.Core.Books.Events;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.MediaFiles.Events;
 using NzbDrone.Core.Messaging.Events;
@@ -41,12 +42,14 @@ namespace NzbDrone.Core.MediaFiles
     {
         private readonly IEventAggregator _eventAggregator;
         private readonly IMediaFileRepository _mediaFileRepository;
+        private readonly IConfigService _configService;
         private readonly Logger _logger;
 
-        public MediaFileService(IMediaFileRepository mediaFileRepository, IEventAggregator eventAggregator, Logger logger)
+        public MediaFileService(IMediaFileRepository mediaFileRepository, IEventAggregator eventAggregator, IConfigService configService, Logger logger)
         {
             _mediaFileRepository = mediaFileRepository;
             _eventAggregator = eventAggregator;
+            _configService = configService;
             _logger = logger;
         }
 
@@ -124,12 +127,27 @@ namespace NzbDrone.Core.MediaFiles
                 .ToList();
             _logger.Trace($"Matched paths for {combined.Count} files");
 
+            static bool Unchanged(IFileInfo diskFile, BookFile dbFile) =>
+                diskFile.Length == dbFile.Size &&
+                Math.Abs((diskFile.LastWriteTimeUtc - dbFile.Modified.ToUniversalTime()).TotalSeconds) <= 1;
+
+            static bool IsMatched(BookFile dbFile) =>
+                dbFile.Edition == null || (dbFile.Edition.IsLoaded && dbFile.Edition.Value != null);
+
+            // With KeepUnmatchedFilesUnmatched on, an unmatched file that was already searched for upstream
+            // stays unmatched even when it changes on disk: re-identifying it after a tag rewrite or a
+            // replaced copy tends to land it on the nearest wrong book. Only a manual import or a
+            // FilterFilesType.None rescan identifies it again.
+            var keepUnmatched = _configService.KeepUnmatchedFilesUnmatched;
+            var keptUnmatched = keepUnmatched
+                ? combined.Where(x => x.DbFile.EditionId == 0 && !IsMatched(x.DbFile) && x.DbFile.LastRemoteSearchTime.HasValue).ToList()
+                : combined.Take(0).ToList();
+
             List<IFileInfo> unwanted = null;
             if (filter == FilterFilesType.Known)
             {
                 unwanted = combined
-                    .Where(x => x.DiskFile.Length == x.DbFile.Size &&
-                           Math.Abs((x.DiskFile.LastWriteTimeUtc - x.DbFile.Modified.ToUniversalTime()).TotalSeconds) <= 1)
+                    .Where(x => Unchanged(x.DiskFile, x.DbFile))
                     .Select(x => x.DiskFile)
                     .ToList();
                 _logger.Trace($"{unwanted.Count} unchanged existing files");
@@ -139,14 +157,12 @@ namespace NzbDrone.Core.MediaFiles
                 unwanted = combined
                     .Where(x =>
                     {
-                        var unchanged = x.DiskFile.Length == x.DbFile.Size &&
-                                        Math.Abs((x.DiskFile.LastWriteTimeUtc - x.DbFile.Modified.ToUniversalTime()).TotalSeconds) <= 1;
-                        var matched = x.DbFile.Edition == null || (x.DbFile.Edition.IsLoaded && x.DbFile.Edition.Value != null);
+                        var matched = IsMatched(x.DbFile);
                         var alreadyRemoteSearched = x.DbFile.LastRemoteSearchTime.HasValue;
 
                         // Skip unchanged files that are matched, or that we already searched upstream
                         // for without a match (no point re-searching until the file changes).
-                        return unchanged && (matched || alreadyRemoteSearched);
+                        return Unchanged(x.DiskFile, x.DbFile) && (matched || alreadyRemoteSearched);
                     })
                     .Select(x => x.DiskFile)
                     .ToList();
@@ -155,6 +171,30 @@ namespace NzbDrone.Core.MediaFiles
             else
             {
                 throw new ArgumentException("Unrecognised value of FilterFilesType filter");
+            }
+
+            if (keptUnmatched.Any())
+            {
+                // Record the new size and modified time so the file isn't seen as changed on every scan.
+                // LastRemoteSearchTime is left as it is.
+                var refreshed = keptUnmatched
+                    .Where(x => !Unchanged(x.DiskFile, x.DbFile))
+                    .Select(x =>
+                    {
+                        _logger.Debug("Keeping unmatched file {0} unmatched although it changed on disk", x.DiskFile.FullName);
+                        x.DbFile.Size = x.DiskFile.Length;
+                        x.DbFile.Modified = x.DiskFile.LastWriteTimeUtc;
+                        return x.DbFile;
+                    })
+                    .ToList();
+
+                if (refreshed.Any())
+                {
+                    _mediaFileRepository.UpdateMany(refreshed);
+                    _logger.Info($"Kept {refreshed.Count} changed unmatched file(s) unmatched (Keep Unmatched Files Unmatched)");
+                }
+
+                unwanted = unwanted.Union(keptUnmatched.Select(x => x.DiskFile)).ToList();
             }
 
             return files.Except(unwanted).ToList();

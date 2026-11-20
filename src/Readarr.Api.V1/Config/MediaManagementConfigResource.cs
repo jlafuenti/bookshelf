@@ -15,6 +15,7 @@ namespace Readarr.Api.V1.Config
         public bool DeleteEmptyFolders { get; set; }
         public FileDateType FileDate { get; set; }
         public bool WatchLibraryForChanges { get; set; }
+        public bool KeepUnmatchedFilesUnmatched { get; set; }
         public RescanAfterRefreshType RescanAfterRefresh { get; set; }
         public AllowFingerprinting AllowFingerprinting { get; set; }
 
@@ -43,6 +44,7 @@ namespace Readarr.Api.V1.Config
                 DeleteEmptyFolders = model.DeleteEmptyFolders,
                 FileDate = model.FileDate,
                 WatchLibraryForChanges = model.WatchLibraryForChanges,
+                KeepUnmatchedFilesUnmatched = model.KeepUnmatchedFilesUnmatched,
                 RescanAfterRefresh = model.RescanAfterRefresh,
                 AllowFingerprinting = model.AllowFingerprinting,
 
